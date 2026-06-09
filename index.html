@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Alphabet: Clasificador Aero-Gestual de Letras</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap');
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background-color: #06020f;
+            color: #f3f4f6;
+            overflow: hidden;
+            touch-action: none; /* Previene scroll accidental en móviles */
+        }
+        .cyber-font {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .neon-glow-cyan {
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.35);
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Alerta de rotación para móviles en vertical */
+        #orientation-warning { display: none; }
+        @media (orientation: portrait) and (max-width: 768px) {
+            #orientation-warning { display: flex; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- Alerta de Rotación -->
+        <div id="orientation-warning" class="absolute inset-0 z-[100] flex-col items-center justify-center bg-[#06020f]/95 backdrop-blur-xl text-white p-6 text-center">
+            <span class="text-6xl mb-6 animate-bounce">📱🔄</span>
+            <h2 class="text-3xl font-bold cyber-font mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">GIRA TU DISPOSITIVO</h2>
+            <p class="text-slate-300 max-w-md mt-2">Para que la cámara y la IA funcionen correctamente, por favor usa tu dispositivo en modo horizontal.</p>
+        </div>
+
+        <!-- Pantalla de Inicio / Bienvenida -->
+        <div id="welcome-screen" class="absolute inset-0 z-[70] flex flex-col items-center justify-center bg-[#06020f]/95 backdrop-blur-md transition-opacity duration-500">
+            <h2 class="text-xl md:text-3xl font-bold text-slate-300 tracking-widest text-center px-4 mb-2 cyber-font uppercase">Bienvenido a jugar</h2>
+            <h1 class="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 cyber-font mb-12 text-center px-4" style="filter: drop-shadow(0 0 15px rgba(6,182,212,0.6));">PINZAS NEON</h1>
+            
+            <div class="flex flex-col md:flex-row gap-6 md:gap-10">
+                <button id="btn-start-game" class="px-8 py-5 text-xl md:text-2xl rounded-2xl cyber-font font-bold text-white bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all transform hover:scale-105 border-2 border-cyan-400 flex items-center justify-center gap-3">
+                    <span class="text-3xl">🫧</span> BURBUJAS
+                </button>
+                <button id="btn-start-draw" class="px-8 py-5 text-xl md:text-2xl rounded-2xl cyber-font font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.6)] transition-all transform hover:scale-105 border-2 border-purple-400 flex items-center justify-center gap-3">
+                    <span class="text-3xl">🖌️</span> DIBUJO
+                </button>
+            </div>
+        </div>
+
+        <!-- Pantalla de Carga -->
+        <div id="loading-screen" class="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-[#06020f]">
+            <div class="animate-spin rounded-full h-12 w-12 md:h-16 md:w-16 border-t-4 border-b-4 border-cyan-500 mb-4"></div>
+            <h3 class="text-lg md:text-xl font-bold text-white cyber-font tracking-widest text-center px-4">INICIANDO SISTEMA</h3>
+            <p class="text-slate-400 mt-2 text-sm md:text-base text-center">Cargando módulos de IA y audio...</p>
+        </div>
+
+        <!-- UI del Juego -->
+        <div id="score-container" class="absolute top-4 left-4 md:top-6 md:left-6 z-20 cyber-font text-2xl md:text-3xl text-cyan-400" style="text-shadow: 0 0 10px rgba(6,182,212,0.8); display: none;">
+            PUNTOS: <span id="score">0</span>
+        </div>
+
+        <!-- Menú de Modos (Responsivo) -->
+        <div id="mode-menu" class="absolute top-4 md:top-6 left-1/2 transform -translate-x-1/2 z-30 flex flex-row gap-2 md:gap-4 w-max" style="display: none;">
+            <button id="btn-game" class="px-3 py-1.5 md:px-6 md:py-2 text-xs md:text-base rounded-full cyber-font font-bold text-white bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.6)] transition-all">MODO JUEGO</button>
+            <button id="btn-draw" class="px-3 py-1.5 md:px-6 md:py-2 text-xs md:text-base rounded-full cyber-font font-bold text-white bg-gray-800 hover:bg-gray-700 border border-gray-600 transition-all">MODO DIBUJO</button>
+        </div>
+
+        <!-- Botón Volver -->
+        <button id="btn-back" class="absolute top-4 right-4 md:top-6 md:right-6 z-30 px-3 py-1.5 md:px-5 md:py-2 text-xs md:text-base rounded-full cyber-font font-bold text-white bg-rose-600 hover:bg-rose-500 border border-rose-400 shadow-[0_0_15px_rgba(225,29,72,0.6)] transition-all flex items-center gap-2" style="display: none;">
+            <span>◀</span> <span class="hidden md:inline">VOLVER</span>
+        </button>
+
+        <!-- Elementos de Video y Canvas -->
+        <video id="input_video" class="hidden"></video>
+        <canvas id="output_canvas" class="absolute inset-0 w-full h-full z-10"></canvas>
+
+        <!-- Firma del Creador -->
+        <div class="fixed bottom-4 right-4 md:bottom-6 md:right-8 opacity-50 hover:opacity-100 transition-opacity duration-500 z-[80] print:hidden pointer-events-none select-none">
+            <div class="flex flex-col items-end">
+                <span class="text-[0.65rem] text-gray-400 uppercase tracking-widest font-sans mb-[-4px]">Creada por</span>
+                <span class="text-xl md:text-2xl text-gray-200" style="font-family: 'Brush Script MT', 'Lucida Handwriting', 'Great Vibes', cursive;">Nasslo Muñoz</span>
+                <span class="text-[0.55rem] md:text-[0.6rem] text-gray-400 font-sans tracking-widest uppercase mt-1">Ingeniero Informático</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        
+        // Canvas extra para la capa de dibujo (con dimensiones base seguras)
+        const drawingCanvas = document.createElement('canvas');
+        drawingCanvas.width = window.innerWidth || 1024;
+        drawingCanvas.height = window.innerHeight || 768;
+        const drawingCtx = drawingCanvas.getContext('2d');
+        
+        let drawLayer = { width: 0, height: 0 }; 
+
+        // --- INICIO CONFIGURACIÓN AUDIO (Tone.js) ---
+        let isAudioInitialized = false;
+        
+        const successSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "triangle" },
+            envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 }
+        }).toDestination();
+        successSynth.volume.value = -5;
+
+        const errorSynth = new Tone.FMSynth({
+            harmonicity: 0.5,
+            modulationIndex: 20,
+            oscillator: { type: "square" },
+            modulation: { type: "sawtooth" },
+            envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.2 }
+        }).toDestination();
+        errorSynth.volume.value = -5;
+
+        // Nuevo sonido para cuando las burbujas revientan al fondo
+        const popSynth = new Tone.Synth({
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }
+        }).toDestination();
+        popSynth.volume.value = -5;
+
+        async function initAudio() {
+            if (!isAudioInitialized) {
+                await Tone.start();
+                isAudioInitialized = true;
+            }
+        }
+
+        function playSuccessSound() {
+            if (!isAudioInitialized) return;
+            successSynth.triggerAttackRelease(["E5", "G5", "C6"], "16n"); 
+        }
+
+        function playErrorSound() {
+            if (!isAudioInitialized) return;
+            errorSynth.triggerAttackRelease("C2", "8n"); 
+        }
+
+        function playPopSound() {
+            if (!isAudioInitialized) return;
+            popSynth.triggerAttackRelease("C6", "32n"); 
+        }
+        
+        window.addEventListener('click', initAudio);
+        window.addEventListener('touchstart', initAudio);
+        // --- FIN CONFIGURACIÓN AUDIO ---
+
+        let score = 0;
+        let exoBalls = [];
+        let particles = [];
+        let zones = [];
+        let prevDrawPos = [null, null, null, null]; 
+        let currentMode = 'menu'; 
+
+        // --- PALETA DE COLORES ---
+        const paletteColors = [
+            '#06b6d4', '#ec4899', '#8b5cf6', '#10b981', '#f59e0b', 
+            '#ef4444', '#3b82f6', '#eab308', '#ffffff', '#14b8a6'
+        ];
+        let currentDrawColor = '#06b6d4';
+        let paletteCircles = [];
+
+        // Categorías del Modo Juego
+        const categoriesData = [
+            { id: 'vocales', label: 'VOCALES', color: '#06b6d4' },     
+            { id: 'consonantes', label: 'CONSONANTES', color: '#ec4899' }, 
+            { id: 'numeros', label: 'NÚMEROS', color: '#8b5cf6' }      
+        ];
+
+        // Elementos que caerán 
+        const spawnItems = [
+            { text: 'A', type: 'vocales', color: '#06b6d4' },
+            { text: 'E', type: 'vocales', color: '#06b6d4' },
+            { text: 'I', type: 'vocales', color: '#06b6d4' },
+            { text: 'O', type: 'vocales', color: '#06b6d4' },
+            { text: 'U', type: 'vocales', color: '#06b6d4' },
+            { text: 'B', type: 'consonantes', color: '#ec4899' },
+            { text: 'Z', type: 'consonantes', color: '#ec4899' },
+            { text: 'M', type: 'consonantes', color: '#ec4899' },
+            { text: 'R', type: 'consonantes', color: '#ec4899' },
+            { text: '7', type: 'numeros', color: '#8b5cf6' },
+            { text: '3', type: 'numeros', color: '#8b5cf6' },
+            { text: '9', type: 'numeros', color: '#8b5cf6' }
+        ];
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; 
+                this.y = y; 
+                this.color = color;
+                this.vx = (Math.random() - 0.5) * 15;
+                this.vy = (Math.random() - 0.5) * 15;
+                this.alpha = 1;
+                this.life = Math.random() * 0.04 + 0.02;
+            }
+            update() {
+                this.x += this.vx; 
+                this.y += this.vy; 
+                this.alpha -= this.life;
+            }
+            draw() {
+                canvasCtx.globalAlpha = Math.max(0, this.alpha);
+                canvasCtx.fillStyle = this.color;
+                canvasCtx.beginPath();
+                canvasCtx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+                canvasCtx.fill();
+                canvasCtx.globalAlpha = 1;
+            }
+        }
+
+        class ExoBall {
+            constructor(text, type, color) {
+                this.text = text; 
+                this.type = type; 
+                this.color = color;
+                this.radius = Math.min(canvasElement.width * 0.08, 35); // Tamaño responsivo
+                this.x = Math.random() * (canvasElement.width - this.radius * 4) + this.radius * 2;
+                this.y = -50;
+                this.vy = Math.random() * 0.8 + 0.5;
+                this.grabbedBy = null; 
+            }
+            update() {
+                if (this.grabbedBy === null) {
+                    this.y += this.vy;
+                }
+            }
+            draw() {
+                canvasCtx.shadowBlur = 20;
+                canvasCtx.shadowColor = this.color;
+                canvasCtx.strokeStyle = this.color;
+                canvasCtx.lineWidth = 3;
+                canvasCtx.beginPath();
+                canvasCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                canvasCtx.stroke();
+                
+                canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                canvasCtx.fill();
+                canvasCtx.shadowBlur = 0;
+
+                canvasCtx.fillStyle = 'white';
+                // Fuente responsiva
+                canvasCtx.font = `bold ${Math.max(16, this.radius * 0.8)}px Orbitron`;
+                canvasCtx.textAlign = 'center';
+                canvasCtx.textBaseline = 'middle';
+                canvasCtx.fillText(this.text, this.x, this.y);
+            }
+        }
+
+        function createParticles(x, y, color) {
+            for(let i = 0; i < 20; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // Bucle generador
+        setInterval(() => {
+            if (currentMode === 'game' && exoBalls.length < 6) {
+                let item = spawnItems[Math.floor(Math.random() * spawnItems.length)];
+                exoBalls.push(new ExoBall(item.text, item.type, item.color));
+            }
+        }, 1500);
+
+        function updateLayout() {
+            // Diseño de Zonas (Modo Juego)
+            const zoneWidth = canvasElement.width / categoriesData.length;
+            const zoneHeight = Math.min(canvasElement.height * 0.2, 120);
+            const zoneY = canvasElement.height - zoneHeight;
+
+            zones = categoriesData.map((cat, index) => ({
+                id: cat.id,
+                label: cat.label,
+                color: cat.color,
+                x: index * zoneWidth,
+                y: zoneY,
+                w: zoneWidth,
+                h: zoneHeight
+            }));
+
+            // Diseño de Paleta de Colores (Modo Dibujo)
+            // Se dibuja en el lado izquierdo de forma vertical
+            const maxRadius = Math.min(22, canvasElement.height * 0.035);
+            const startY = canvasElement.height * 0.15;
+            const spacing = (canvasElement.height * 0.7) / paletteColors.length;
+
+            paletteCircles = paletteColors.map((color, i) => {
+                return {
+                    x: maxRadius + 15, // Padding desde la izquierda
+                    y: startY + i * spacing,
+                    r: maxRadius,
+                    color: color
+                };
+            });
+        }
+
+        function drawZones() {
+            zones.forEach(z => {
+                canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                canvasCtx.fillRect(z.x, z.y, z.w, z.h);
+
+                canvasCtx.strokeStyle = z.color;
+                canvasCtx.lineWidth = 2;
+                canvasCtx.strokeRect(z.x + 5, z.y + 5, z.w - 10, z.h - 10);
+
+                canvasCtx.fillStyle = z.color;
+                const fontSize = Math.max(10, Math.min(22, z.w * 0.12));
+                canvasCtx.font = `bold ${fontSize}px Orbitron`;
+                canvasCtx.textAlign = 'center';
+                canvasCtx.textBaseline = 'middle';
+                canvasCtx.fillText(z.label, z.x + z.w / 2, z.y + z.h / 2);
+            });
+        }
+
+        function drawPalette() {
+            paletteCircles.forEach(circle => {
+                // Dibujar círculo de color
+                canvasCtx.beginPath();
+                canvasCtx.arc(circle.x, circle.y, circle.r, 0, Math.PI * 2);
+                canvasCtx.fillStyle = circle.color;
+                canvasCtx.fill();
+                
+                // Resaltar si es el color activo
+                canvasCtx.lineWidth = currentDrawColor === circle.color ? 4 : 2;
+                canvasCtx.strokeStyle = currentDrawColor === circle.color ? 'white' : 'rgba(255,255,255,0.4)';
+                
+                if (currentDrawColor === circle.color) {
+                    canvasCtx.shadowBlur = 15;
+                    canvasCtx.shadowColor = circle.color;
+                }
+                
+                canvasCtx.stroke();
+                canvasCtx.shadowBlur = 0; // Reset
+            });
+        }
+
+        function onResults(results) {
+            document.getElementById('loading-screen').style.display = 'none';
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // Dibujar cámara espejada
+            if (results.image) {
+                canvasCtx.globalCompositeOperation = 'destination-over';
+                canvasCtx.translate(canvasElement.width, 0);
+                canvasCtx.scale(-1, 1);
+                canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                canvasCtx.setTransform(1, 0, 0, 1, 0, 0); 
+                canvasCtx.globalCompositeOperation = 'source-over';
+            }
+
+            // Filtro (0.45) - MODIFICADO: Aclarado un 10% adicional
+            canvasCtx.fillStyle = 'rgba(6, 2, 15, 0.45)'; 
+            canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // Capa de Dibujo
+            if (drawingCanvas.width > 0 && drawingCanvas.height > 0 && currentMode === 'draw') {
+                canvasCtx.drawImage(drawingCanvas, 0, 0);
+                drawPalette();
+            }
+
+            if (currentMode === 'game') {
+                drawZones();
+            }
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                results.multiHandLandmarks.forEach((landmarks, h) => {
+                    // Esqueleto de la mano (mismo color para simplificar en dibujo, dinámico al color actual)
+                    let handColor = currentMode === 'draw' ? currentDrawColor : (h === 0 ? '#06b6d4' : '#a855f7');
+                    
+                    canvasCtx.strokeStyle = handColor; 
+                    canvasCtx.lineWidth = 2;
+                    canvasCtx.shadowBlur = 10;
+                    canvasCtx.shadowColor = handColor;
+                    
+                    const connections = [
+                        [0, 1], [1, 2], [2, 3], [3, 4], 
+                        [0, 5], [5, 6], [6, 7], [7, 8], 
+                        [5, 9], [9, 10], [10, 11], [11, 12], 
+                        [9, 13], [13, 14], [14, 15], [15, 16], 
+                        [13, 17], [17, 18], [18, 19], [19, 20], 
+                        [0, 17]
+                    ];
+
+                    canvasCtx.beginPath();
+                    connections.forEach(conn => {
+                        const x1 = (1 - landmarks[conn[0]].x) * canvasElement.width;
+                        const y1 = landmarks[conn[0]].y * canvasElement.height;
+                        const x2 = (1 - landmarks[conn[1]].x) * canvasElement.width;
+                        const y2 = landmarks[conn[1]].y * canvasElement.height;
+                        canvasCtx.moveTo(x1, y1);
+                        canvasCtx.lineTo(x2, y2);
+                    });
+                    canvasCtx.stroke();
+                    canvasCtx.shadowBlur = 0;
+
+                    // Puntas de los dedos
+                    const indexTip = landmarks[8];
+                    const thumbTip = landmarks[4];
+                    const middleTip = landmarks[12];
+                    const ringTip = landmarks[16];
+                    const pinkyTip = landmarks[20];
+                    
+                    // Coordenadas reflejadas
+                    const pinchX = (1 - indexTip.x) * canvasElement.width;
+                    const pinchY = indexTip.y * canvasElement.height;
+                    const thumbX = (1 - thumbTip.x) * canvasElement.width;
+                    const thumbY = thumbTip.y * canvasElement.height;
+                    const middleX = (1 - middleTip.x) * canvasElement.width;
+                    const middleY = middleTip.y * canvasElement.height;
+
+                    const distance = Math.hypot(pinchX - thumbX, pinchY - thumbY);
+                    
+                    // Ajuste Responsivo: Umbral dinámico basado en el ancho de la pantalla (mínimo 25px, máximo 60px)
+                    const pinchThreshold = Math.max(25, Math.min(60, canvasElement.width * 0.04));
+                    const isPinching = distance < pinchThreshold;
+
+                    if (currentMode === 'game') {
+                        let myBall = exoBalls.find(b => b.grabbedBy === h);
+
+                        if (isPinching) {
+                            canvasCtx.fillStyle = '#ec4899';
+                            canvasCtx.beginPath();
+                            canvasCtx.arc(pinchX, pinchY, 15, 0, Math.PI * 2);
+                            canvasCtx.fill();
+
+                            if (!myBall) {
+                                for (let ball of exoBalls) {
+                                    if (ball.grabbedBy === null) {
+                                        const d = Math.hypot(pinchX - ball.x, pinchY - ball.y);
+                                        if (d < ball.radius + 20) {
+                                            ball.grabbedBy = h;
+                                            myBall = ball;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (myBall) {
+                                myBall.x = pinchX;
+                                myBall.y = pinchY;
+                            }
+                        } else {
+                            if (myBall) {
+                                myBall.grabbedBy = null;
+                                for (let z of zones) {
+                                    if (myBall.x > z.x && myBall.x < z.x + z.w &&
+                                        myBall.y > z.y && myBall.y < z.y + z.h) {
+                                        
+                                        if (myBall.type === z.id) {
+                                            score += 100;
+                                            createParticles(myBall.x, myBall.y, z.color);
+                                            playSuccessSound(); 
+                                        } else {
+                                            score = Math.max(0, score - 50);
+                                            createParticles(myBall.x, myBall.y, '#ef4444');
+                                            playErrorSound(); 
+                                        }
+                                        document.getElementById('score').innerText = score;
+                                        
+                                        const idx = exoBalls.indexOf(myBall);
+                                        if (idx > -1) exoBalls.splice(idx, 1);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } else if (currentMode === 'draw') {
+                        // LÓGICA DE DIBUJO Y PALETA DE COLORES
+                        const isIndexUp = indexTip.y < landmarks[6].y;
+                        const isMiddleUp = middleTip.y < landmarks[10].y;
+                        const isRingUp = ringTip.y < landmarks[14].y;
+                        const isPinkyUp = pinkyTip.y < landmarks[18].y;
+
+                        if (isPinching) {
+                            // Revisar si pincha sobre un color de la paleta
+                            for (let circle of paletteCircles) {
+                                // Tolerancia dinámica según el tamaño de la pantalla
+                                const tolerance = circle.r + (canvasElement.width * 0.015);
+                                if (Math.hypot(pinchX - circle.x, pinchY - circle.y) < tolerance) {
+                                    if (currentDrawColor !== circle.color) {
+                                        currentDrawColor = circle.color;
+                                        playSuccessSound(); // Sonido al cambiar color
+                                    }
+                                    break;
+                                }
+                            }
+
+                            // Indicador de pinza
+                            canvasCtx.fillStyle = currentDrawColor;
+                            canvasCtx.beginPath();
+                            canvasCtx.arc(pinchX, pinchY, 12, 0, Math.PI * 2);
+                            canvasCtx.fill();
+                            prevDrawPos[h] = null; // No dibujar al pinchar
+                        } 
+                        // 5 dedos abiertos -> Limpiar todo
+                        else if (isIndexUp && isMiddleUp && isRingUp && isPinkyUp) {
+                            if (drawingCanvas.width > 0 && drawingCanvas.height > 0) {
+                                drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                            }
+                            prevDrawPos[h] = null;
+                        } 
+                        // 2 dedos (Índice y Medio) -> Borrador
+                        else if (isIndexUp && isMiddleUp && !isRingUp && !isPinkyUp) {
+                            const eraserX = (pinchX + middleX) / 2;
+                            const eraserY = (pinchY + middleY) / 2;
+                            const eraserRadius = Math.max(30, canvasElement.width * 0.04); // Borrador responsivo
+                            
+                            drawingCtx.globalCompositeOperation = 'destination-out';
+                            drawingCtx.beginPath();
+                            drawingCtx.arc(eraserX, eraserY, eraserRadius, 0, Math.PI * 2);
+                            drawingCtx.fill();
+                            drawingCtx.globalCompositeOperation = 'source-over';
+                            
+                            canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                            canvasCtx.lineWidth = 2;
+                            canvasCtx.beginPath();
+                            canvasCtx.arc(eraserX, eraserY, eraserRadius, 0, Math.PI * 2);
+                            canvasCtx.stroke();
+                            
+                            prevDrawPos[h] = null;
+                        }
+                        // 1 dedo (Índice) -> Dibujar
+                        else if (isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+                            if (prevDrawPos[h]) {
+                                drawingCtx.strokeStyle = currentDrawColor;
+                                drawingCtx.lineWidth = 6;
+                                drawingCtx.lineCap = 'round';
+                                drawingCtx.lineJoin = 'round';
+                                drawingCtx.shadowBlur = 10;
+                                drawingCtx.shadowColor = currentDrawColor;
+                                drawingCtx.beginPath();
+                                drawingCtx.moveTo(prevDrawPos[h].x, prevDrawPos[h].y);
+                                drawingCtx.lineTo(pinchX, pinchY);
+                                drawingCtx.stroke();
+                            }
+                            prevDrawPos[h] = {x: pinchX, y: pinchY};
+                            
+                            canvasCtx.fillStyle = currentDrawColor;
+                            canvasCtx.beginPath();
+                            canvasCtx.arc(pinchX, pinchY, 8, 0, Math.PI * 2);
+                            canvasCtx.fill();
+                        } else {
+                            prevDrawPos[h] = null;
+                        }
+                    }
+                });
+            } else {
+                exoBalls.forEach(b => b.grabbedBy = null);
+                prevDrawPos = [null, null, null, null];
+            }
+
+            // Animaciones Entidades
+            if (currentMode === 'game') {
+                for (let i = exoBalls.length - 1; i >= 0; i--) {
+                    let ball = exoBalls[i];
+                    ball.update();
+                    ball.draw();
+                    if (ball.y > canvasElement.height + ball.radius) {
+                        // MODIFICADO: Generar sonido de 'pop' y partículas visuales al salir por abajo
+                        createParticles(ball.x, ball.y, ball.color);
+                        playPopSound();
+                        exoBalls.splice(i, 1);
+                    }
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) { 
+                let p = particles[i]; 
+                p.update(); 
+                p.draw(); 
+                if (p.alpha <= 0) particles.splice(i, 1); 
+            }
+            
+            canvasCtx.restore();
+        }
+
+        function resizeCanvas() {
+            const container = canvasElement.parentElement;
+            canvasElement.width = Math.max(1, container.clientWidth);
+            canvasElement.height = Math.max(1, container.clientHeight);
+            
+            if (drawingCanvas.width > 0 && drawingCanvas.height > 0) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = drawingCanvas.width;
+                tempCanvas.height = drawingCanvas.height;
+                tempCanvas.getContext('2d').drawImage(drawingCanvas, 0, 0);
+                
+                drawingCanvas.width = canvasElement.width;
+                drawingCanvas.height = canvasElement.height;
+                drawingCtx.drawImage(tempCanvas, 0, 0);
+            } else {
+                drawingCanvas.width = canvasElement.width;
+                drawingCanvas.height = canvasElement.height;
+            }
+
+            drawLayer.width = canvasElement.width;
+            drawLayer.height = canvasElement.height;
+            updateLayout();
+        }
+
+        window.onload = function() {
+            const btnGame = document.getElementById('btn-game');
+            const btnDraw = document.getElementById('btn-draw');
+            const scoreContainer = document.getElementById('score-container');
+            const modeMenu = document.getElementById('mode-menu');
+            const btnBack = document.getElementById('btn-back');
+
+            const welcomeScreen = document.getElementById('welcome-screen');
+            const btnStartGame = document.getElementById('btn-start-game');
+            const btnStartDraw = document.getElementById('btn-start-draw');
+
+            function enterApp(mode) {
+                // Efecto de desvanecimiento
+                welcomeScreen.style.opacity = '0';
+                setTimeout(() => {
+                    welcomeScreen.style.display = 'none';
+                }, 500);
+
+                modeMenu.style.display = 'flex';
+                btnBack.style.display = 'flex';
+
+                // Activar el modo correspondiente
+                if (mode === 'game') {
+                    btnGame.click();
+                } else {
+                    btnDraw.click();
+                }
+                
+                // Asegurar que el audio se inicie con la primera interacción del usuario
+                initAudio();
+            }
+
+            btnStartGame.addEventListener('click', () => enterApp('game'));
+            btnStartDraw.addEventListener('click', () => enterApp('draw'));
+
+            btnBack.addEventListener('click', () => {
+                currentMode = 'menu';
+                
+                // Mostrar pantalla de bienvenida
+                welcomeScreen.style.display = 'flex';
+                setTimeout(() => {
+                    welcomeScreen.style.opacity = '1';
+                }, 10);
+                
+                // Ocultar UI de juego
+                modeMenu.style.display = 'none';
+                btnBack.style.display = 'none';
+                scoreContainer.style.display = 'none';
+                
+                // Limpiar estado y lienzo
+                exoBalls = [];
+                score = 0;
+                document.getElementById('score').innerText = score;
+                if (drawingCanvas.width > 0 && drawingCanvas.height > 0) {
+                    drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                }
+            });
+
+            btnGame.addEventListener('click', () => {
+                currentMode = 'game';
+                btnGame.className = "px-3 py-1.5 md:px-6 md:py-2 text-xs md:text-base rounded-full cyber-font font-bold text-white bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.6)] transition-all";
+                btnDraw.className = "px-3 py-1.5 md:px-6 md:py-2 text-xs md:text-base rounded-full cyber-font font-bold text-white bg-gray-800 hover:bg-gray-700 border border-gray-600 transition-all";
+                scoreContainer.style.display = 'block';
+                prevDrawPos = [null, null, null, null];
+            });
+
+            btnDraw.addEventListener('click', () => {
+                currentMode = 'draw';
+                btnDraw.className = "px-3 py-1.5 md:px-6 md:py-2 text-xs md:text-base rounded-full cyber-font font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.6)] transition-all";
+                btnGame.className = "px-3 py-1.5 md:px-6 md:py-2 text-xs md:text-base rounded-full cyber-font font-bold text-white bg-gray-800 hover:bg-gray-700 border border-gray-600 transition-all";
+                scoreContainer.style.display = 'none';
+                exoBalls.forEach(b => b.grabbedBy = null);
+            });
+
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            const hands = new Hands({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }});
+            
+            hands.setOptions({
+                maxNumHands: 2,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.7,
+                minTrackingConfidence: 0.7
+            });
+            
+            hands.onResults(onResults);
+
+            const camera = new Camera(videoElement, {
+                onFrame: async () => { 
+                    await hands.send({ image: videoElement }); 
+                },
+                width: 640, 
+                height: 480
+            });
+
+            camera.start().catch(err => {
+                document.getElementById('loading-screen').innerHTML = `
+                    <div class="text-rose-500 text-3xl md:text-5xl mb-4">⚠️</div>
+                    <h3 class="text-lg md:text-xl font-bold text-white cyber-font">ERROR DE CÁMARA</h3>
+                    <p class="text-xs md:text-sm text-slate-400 mt-2 max-w-sm text-center leading-relaxed px-4">
+                        Por favor, da acceso a tu webcam para iniciar el detector Aero-Gestual.
+                    </p>`;
+            });
+        }
+    </script>
+</body>
+</html>
