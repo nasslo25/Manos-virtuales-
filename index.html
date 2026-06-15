@@ -297,14 +297,14 @@
             }));
 
             // Diseño de Paleta de Colores (Modo Dibujo)
-            // Se dibuja en el lado izquierdo de forma vertical
-            const maxRadius = Math.min(22, canvasElement.height * 0.035);
-            const startY = canvasElement.height * 0.15;
-            const spacing = (canvasElement.height * 0.7) / paletteColors.length;
+            // AUMENTADO EL TAMAÑO MÁXIMO DEL RADIO PARA ESFERAS MÁS GRANDES
+            const maxRadius = Math.min(35, canvasElement.height * 0.05); // Aumentado de 22/0.035 a 35/0.05
+            const startY = canvasElement.height * 0.10; // Subido un poco el inicio
+            const spacing = (canvasElement.height * 0.8) / paletteColors.length; // Espaciado ajustado
 
             paletteCircles = paletteColors.map((color, i) => {
                 return {
-                    x: maxRadius + 15, // Padding desde la izquierda
+                    x: maxRadius + 20, // Padding desde la izquierda aumentado para evitar borde
                     y: startY + i * spacing,
                     r: maxRadius,
                     color: color
@@ -339,11 +339,11 @@
                 canvasCtx.fill();
                 
                 // Resaltar si es el color activo
-                canvasCtx.lineWidth = currentDrawColor === circle.color ? 4 : 2;
+                canvasCtx.lineWidth = currentDrawColor === circle.color ? 5 : 2; // Borde más grueso
                 canvasCtx.strokeStyle = currentDrawColor === circle.color ? 'white' : 'rgba(255,255,255,0.4)';
                 
                 if (currentDrawColor === circle.color) {
-                    canvasCtx.shadowBlur = 15;
+                    canvasCtx.shadowBlur = 20; // Brillo más grande
                     canvasCtx.shadowColor = circle.color;
                 }
                 
@@ -368,7 +368,7 @@
                 canvasCtx.globalCompositeOperation = 'source-over';
             }
 
-            // Filtro (0.45) - MODIFICADO: Aclarado un 10% adicional
+            // Filtro (0.45)
             canvasCtx.fillStyle = 'rgba(6, 2, 15, 0.45)'; 
             canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -384,7 +384,7 @@
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 results.multiHandLandmarks.forEach((landmarks, h) => {
-                    // Esqueleto de la mano (mismo color para simplificar en dibujo, dinámico al color actual)
+                    // Esqueleto de la mano
                     let handColor = currentMode === 'draw' ? currentDrawColor : (h === 0 ? '#06b6d4' : '#a855f7');
                     
                     canvasCtx.strokeStyle = handColor; 
@@ -430,7 +430,7 @@
 
                     const distance = Math.hypot(pinchX - thumbX, pinchY - thumbY);
                     
-                    // Ajuste Responsivo: Umbral dinámico basado en el ancho de la pantalla (mínimo 25px, máximo 60px)
+                    // Ajuste Responsivo: Umbral dinámico
                     const pinchThreshold = Math.max(25, Math.min(60, canvasElement.width * 0.04));
                     const isPinching = distance < pinchThreshold;
 
@@ -494,8 +494,8 @@
                         if (isPinching) {
                             // Revisar si pincha sobre un color de la paleta
                             for (let circle of paletteCircles) {
-                                // Tolerancia dinámica según el tamaño de la pantalla
-                                const tolerance = circle.r + (canvasElement.width * 0.015);
+                                // TOLERANCIA AUMENTADA para que sea más fácil de agarrar
+                                const tolerance = circle.r + (canvasElement.width * 0.03); // Aumentada de 0.015 a 0.03
                                 if (Math.hypot(pinchX - circle.x, pinchY - circle.y) < tolerance) {
                                     if (currentDrawColor !== circle.color) {
                                         currentDrawColor = circle.color;
@@ -508,7 +508,7 @@
                             // Indicador de pinza
                             canvasCtx.fillStyle = currentDrawColor;
                             canvasCtx.beginPath();
-                            canvasCtx.arc(pinchX, pinchY, 12, 0, Math.PI * 2);
+                            canvasCtx.arc(pinchX, pinchY, 15, 0, Math.PI * 2); // Indicador un poco más grande
                             canvasCtx.fill();
                             prevDrawPos[h] = null; // No dibujar al pinchar
                         } 
@@ -523,7 +523,7 @@
                         else if (isIndexUp && isMiddleUp && !isRingUp && !isPinkyUp) {
                             const eraserX = (pinchX + middleX) / 2;
                             const eraserY = (pinchY + middleY) / 2;
-                            const eraserRadius = Math.max(30, canvasElement.width * 0.04); // Borrador responsivo
+                            const eraserRadius = Math.max(30, canvasElement.width * 0.04); 
                             
                             drawingCtx.globalCompositeOperation = 'destination-out';
                             drawingCtx.beginPath();
@@ -576,7 +576,6 @@
                     ball.update();
                     ball.draw();
                     if (ball.y > canvasElement.height + ball.radius) {
-                        // MODIFICADO: Generar sonido de 'pop' y partículas visuales al salir por abajo
                         createParticles(ball.x, ball.y, ball.color);
                         playPopSound();
                         exoBalls.splice(i, 1);
@@ -646,7 +645,7 @@
                     btnDraw.click();
                 }
                 
-                // Asegurar que el audio se inicie con la primera interacción del usuario
+                // Asegurar que el audio se inicie
                 initAudio();
             }
 
